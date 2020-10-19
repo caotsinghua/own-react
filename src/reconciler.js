@@ -1,5 +1,9 @@
 import { TEXT_ELEMENT } from "./vnode.js"
-
+const EFFECT_TAGS = {
+    UPDATE:'UPDATE',
+    PLACEMENT:"PLACEMENT",// 创建
+    DELETION:"DELETION" 
+}
 // 简单的mount 
 // 只包含了element type 和 text
 function createDom(fiber){
@@ -21,19 +25,22 @@ function createDom(fiber){
 
 function render(vnode,container){
     // root fiber tree
-    // work in progreess root
+    // work in progreess root,在内存中完成更新
+    // 最终commit
     wipRoot = {
         dom:container,
         props:{
             children:[vnode]
-        }
+        },
+        alternate:currentRoot // 引用old fiber
     }
+    deletions = [] // init
     nextUnitOfWork = wipRoot
 }
 let wipRoot = null
+let currentRoot = null
 let nextUnitOfWork = null
-
-let stop = 0
+let deletions = null
 
 // concurrrent mode
 function workLoop(deadline){
@@ -46,11 +53,17 @@ function workLoop(deadline){
         nextUnitOfWork = performUnitOfWork(nextUnitOfWork)
         shouldYield = deadline.timeRemaining() < 1
     }
+    if(!nextUnitOfWork && wipRoot){
+        // 处理完毕
+        // patch真实dom
+        commitRoot()
+    }
     requestIdleCallback(workLoop)
 }
 requestIdleCallback(workLoop)
 
 // 会返回next fiber
+// 构造fiber树
 function performUnitOfWork(fiber){
     stop++;
     // add dom node
@@ -69,26 +82,7 @@ function performUnitOfWork(fiber){
     //     fiber.parent.dom.appendChild(fiber.dom)
     // }
     const elements = fiber.props.children;
-    let index = 0
-    let prevSibling = null
-    // 创建子节点fiber
-    while(index < elements.length){
-        const element = elements[index]
-        const newFiber = {
-            type:element.type,
-            props:element.props,
-            parent:fiber,
-            dom:null
-        }
-        if(index ===0){
-            // 第一个child
-            fiber.child = newFiber // 相当于children head
-        }else{
-            prevSibling.sibling = newFiber
-        }
-        prevSibling = newFiber // children
-        index++
-    }
+    reconcileChildren(fiber,elements)
 
     if(fiber.child){
         // 首先返回child
@@ -106,6 +100,77 @@ function performUnitOfWork(fiber){
     }
 
 }
+
+function reconcileChildren(wipFiber,elements){
+    let index = 0
+    let prevSibling = null
+    let oldFiber = wipFiber.alternate && wipFiber.alternate.child // 上次渲染的
+    // 创建子节点fiber
+    while(index < elements.length || oldFiber != null){
+        const element = elements[index]
+        // 开始比较fiber一致性
+        let newFiber = null
+        const sameType = oldFiber && element && element.type === oldFiber.type
+
+        if(sameType){
+            // 更新数据
+            newFiber = {
+                type:element.type,
+                props:element.props,
+                parent:wipFiber,
+                dom:oldFiber.dom,
+                alternate:oldFiber,
+                effectTag:EFFECT_TAGS.UPDATE
+            }
+        }
+        if(element && !sameType){
+            // 添加新节点
+            newFiber = {
+                type:element.type,
+                props:element.props,
+                parent:wipFiber,
+                dom:null,
+                alternate:null,
+                effectTag:EFFECT_TAGS.PLACEMENT
+            }
+        }
+        if(oldFiber && !sameType){
+            // 移除旧节点
+            oldFiber.effectTag = EFFECT_TAGS.DELETION
+            deletions.push(oldFiber)
+        }
+        
+        if(index ===0){
+            // 第一个child
+            wipFiber.child = newFiber // 相当于children head
+        }else{
+            prevSibling.sibling = newFiber
+        }
+        prevSibling = newFiber // children
+        index++
+    }
+}
+
+function commitRoot(){
+    // 移除所有节点
+    deletions.forEach(commitWork)
+    commitWork(wipRoot.child)
+    // 保存上一次处理的fiber树
+    currentRoot = wipRoot
+    wipRoot = null
+}
+// start commit
+function commitWork(fiber){
+    if(!fiber){
+        return;
+    }
+    const domParent = fiber.parent.dom // 容器
+    domParent.appendChild(fiber.dom) // 将当前fiber的元素挂载
+    commitWork(fiber.child) // 继续对child递归
+    commitWork(fiber.sibling) // 没有子节点，递归兄弟节点
+    // 整体来看，是个深度遍历
+}
+
 export {
     render
 }
