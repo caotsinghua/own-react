@@ -1,0 +1,16 @@
+{
+  "name": "own-react",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/caotsinghua/own-react.git",
+  "author": "caotsinghua <1577499543@qq.com>",
+  "license": "MIT",
+  "scripts": {
+    "transform": "babel src --out-dir output"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.12.1",
+    "@babel/core": "^7.12.3",
+    "@babel/preset-react": "^7.12.1"
+  }
+}

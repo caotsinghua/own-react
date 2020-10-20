@@ -6,20 +6,18 @@ const tNode = {
     style: "",
     className: "",
     customAttr: "",
-    children: [],
-  },
+    children: []
+  }
 };
 export const TEXT_ELEMENT = Symbol.for("text_element");
-
 export function createElement(type, config, ...children) {
   const node = {
     type,
-    props: {
-      ...config,
-      children: children.map((item) => {
+    props: { ...config,
+      children: children.map(item => {
         return typeof item === "object" ? item : createTextElement(item);
-      }),
-    },
+      })
+    }
   };
   return node;
 }
@@ -29,8 +27,8 @@ function createTextElement(text) {
     type: TEXT_ELEMENT,
     props: {
       nodeValue: text,
-      children: [],
-    },
+      children: []
+    }
   };
   return node;
 }

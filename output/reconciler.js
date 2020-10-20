@@ -1,13 +1,15 @@
 import { TEXT_ELEMENT } from "./vnode.js";
 const EFFECT_TAGS = {
   UPDATE: "UPDATE",
-  PLACEMENT: "PLACEMENT", // 创建
-  DELETION: "DELETION",
-};
-// 简单的mount
+  PLACEMENT: "PLACEMENT",
+  // 创建
+  DELETION: "DELETION"
+}; // 简单的mount
 // 只包含了element type 和 text
+
 function createDom(fiber) {
   let dom = null;
+
   if (typeof fiber.type === "string") {
     // host
     dom = document.createElement(fiber.type);
@@ -26,76 +28,85 @@ function render(vnode, container) {
   wipRoot = {
     dom: container,
     props: {
-      children: [vnode],
+      children: [vnode]
     },
-    alternate: currentRoot, // 引用old fiber
+    alternate: currentRoot // 引用old fiber
+
   };
   deletions = []; // init
+
   nextUnitOfWork = wipRoot;
 }
+
 let wipRoot = null;
 let currentRoot = null;
 let nextUnitOfWork = null;
-let deletions = null;
+let deletions = null; // concurrrent mode
 
-// concurrrent mode
 function workLoop(deadline) {
-  console.log(" -- run workloop --");
-  // console.log(deadline,deadline.timeRemaining())
+  console.log(" -- run workloop --"); // console.log(deadline,deadline.timeRemaining())
+
   let shouldYield = false;
+
   while (nextUnitOfWork && !shouldYield) {
     // console.log(shouldYield)
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
     shouldYield = deadline.timeRemaining() < 1;
   }
+
   if (!nextUnitOfWork && wipRoot) {
     // 处理完毕
     // patch真实dom
     commitRoot();
   }
+
   requestIdleCallback(workLoop);
 }
-requestIdleCallback(workLoop);
 
-// 会返回next fiber
+requestIdleCallback(workLoop); // 会返回next fiber
 // 构造fiber树
+
 function performUnitOfWork(fiber) {
   // add dom node
   // create new fibers
   // retuen next unit of work
   console.log("--- 处理单元 ---", fiber);
-  if(isFunctionComponent(fiber)){
-    updateFunctionComponent(fiber)
-  }else{
+
+  if (isFunctionComponent(fiber)) {
+    updateFunctionComponent(fiber);
+  } else {
     updateHostComponent(fiber);
   }
- 
 
   if (fiber.child) {
     // 首先返回child
     return fiber.child;
   }
-  let nextFiber = fiber;
-  // 没有child了
+
+  let nextFiber = fiber; // 没有child了
   // 如果有邻居，返回sibling
   // 否则继续往parent寻找
+
   while (nextFiber) {
     if (nextFiber.sibling) {
       return nextFiber.sibling;
     }
+
     nextFiber = nextFiber.parent; // 赋值parent后，寻找parent的sibling，因为parent已经处理过了
   }
-}
-// 这里进行diff
+} // 这里进行diff
+
+
 function reconcileChildren(wipFiber, elements) {
   let index = 0;
   let prevSibling = null;
   let oldFiber = wipFiber.alternate && wipFiber.alternate.child; // 上次渲染的children头
   // 创建子节点fiber
+
   while (index < elements.length || oldFiber != null) {
     console.log(oldFiber);
-    const element = elements[index];
-    // 开始比较fiber一致性
+    const element = elements[index]; // 开始比较fiber一致性
+
     let newFiber = null;
     const sameType = oldFiber && element && element.type === oldFiber.type;
 
@@ -107,9 +118,10 @@ function reconcileChildren(wipFiber, elements) {
         parent: wipFiber,
         dom: oldFiber.dom,
         alternate: oldFiber,
-        effectTag: EFFECT_TAGS.UPDATE,
+        effectTag: EFFECT_TAGS.UPDATE
       };
     }
+
     if (element && !sameType) {
       // 添加新节点
       newFiber = {
@@ -118,9 +130,10 @@ function reconcileChildren(wipFiber, elements) {
         parent: wipFiber,
         dom: null,
         alternate: null,
-        effectTag: EFFECT_TAGS.PLACEMENT,
+        effectTag: EFFECT_TAGS.PLACEMENT
       };
     }
+
     if (oldFiber && !sameType) {
       // 移除旧节点
       oldFiber.effectTag = EFFECT_TAGS.DELETION;
@@ -130,6 +143,7 @@ function reconcileChildren(wipFiber, elements) {
     if (oldFiber) {
       oldFiber = oldFiber.sibling; // 继续下一个
     }
+
     if (index === 0) {
       // 第一个child
       wipFiber.child = newFiber; // 相当于children head
@@ -143,29 +157,35 @@ function reconcileChildren(wipFiber, elements) {
         prevSibling.sibling = newFiber;
       }
     }
+
     prevSibling = newFiber; // children
+
     index++;
   }
 }
 
 function commitRoot() {
-  console.log("commit root");
-  // 每次commit时，移除所有待删除节点
+  console.log("commit root"); // 每次commit时，移除所有待删除节点
+
   deletions.forEach(commitWork);
-  commitWork(wipRoot.child);
-  // 保存上一次处理的fiber树
+  commitWork(wipRoot.child); // 保存上一次处理的fiber树
+
   currentRoot = wipRoot;
   wipRoot = null;
-}
-// start commit
+} // start commit
+
+
 function commitWork(fiber) {
   if (!fiber) {
     return;
   }
+
   const domParentFiber = fiber.parent; // 容器
-  while(!domParentFiber.dom){
-    domParentFiber = domParentFiber.parent
+
+  while (!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent;
   }
+
   const domParent = domParentFiber.dom; // 一直往parent找到带有dom的fiber
   // function组件的fiber是没有dom的
 
@@ -174,28 +194,29 @@ function commitWork(fiber) {
   } else if (fiber.effectTag === EFFECT_TAGS.DELETION) {
     // domParent.removeChild(fiber.dom); //删除
     // 删除旧dom的时候，也要找到带dom的fiber再删除
-    commitDeletion(fiber,domParent)
+    commitDeletion(fiber, domParent);
   } else if (fiber.effectTag === EFFECT_TAGS.UPDATE && fiber.dom != null) {
     // update dom
-    updateDom(
-      fiber.dom /*old el*/,
-      fiber.alternate.props /**old props */,
-      fiber.props /**new props */
+    updateDom(fiber.dom
+    /*old el*/
+    , fiber.alternate.props
+    /**old props */
+    , fiber.props
+    /**new props */
     );
   }
 
   commitWork(fiber.child); // 继续对child递归
+
   commitWork(fiber.sibling); // 没有子节点，递归兄弟节点
   // 整体来看，是个深度遍历
-}
+} // 更新宿主环境元素（更新、创建）
 
-// 更新宿主环境元素（更新、创建）
+
 function updateHostComponent(fiber) {
   if (!fiber.dom) {
     fiber.dom = createDom(fiber);
-  }
-
-  // 每次处理到这个fiber的时候，都会把dom插入进去
+  } // 每次处理到这个fiber的时候，都会把dom插入进去
   // 在画完整个tree前，浏览器可能中断绘制过程
   // 用户会看到不完整的ui
   // 因此需要移除
@@ -203,27 +224,32 @@ function updateHostComponent(fiber) {
   //     fiber.parent.dom.appendChild(fiber.dom)
   // }
   // 而在commitroot阶段处理所有dom的插入更新等
+
+
   const elements = fiber.props.children;
   reconcileChildren(fiber, elements);
-}
-// 更新函数组件
-function updateFunctionComponent(fiber){
-  const children = [fiber.type(fiber.props)]
-  reconcileChildren(fiber,children) // 处理children的diff情况
-}
+} // 更新函数组件
 
-// 删除
-function commitDeletion(fiber,parentDom){
-  if(fiber.dom){
-    parentDom.removeChild(fiber.dom)
-  }else{
-    commitDeletion(fiber.child,parentDom)
+
+function updateFunctionComponent(fiber) {
+  const children = [fiber.type(fiber.props)];
+  reconcileChildren(fiber, children); // 处理children的diff情况
+} // 删除
+
+
+function commitDeletion(fiber, parentDom) {
+  if (fiber.dom) {
+    parentDom.removeChild(fiber.dom);
+  } else {
+    commitDeletion(fiber.child, parentDom);
   }
 }
 /**
  *
  * @param {string} name
  */
+
+
 function isEventType(name) {
   return name.startsWith("on");
 }
@@ -231,6 +257,8 @@ function isEventType(name) {
  *
  * @param {string} name
  */
+
+
 function isProperty(name) {
   if (name === "children") return false;
   if (isEventType(name)) return false;
@@ -242,6 +270,8 @@ function isProperty(name) {
  * @param {*} oldProps
  * @param {*} nextProps
  */
+
+
 function updateDom(element, oldProps, nextProps) {
   // console.log("--- update dom ---")
   oldProps = oldProps || {};
@@ -252,12 +282,14 @@ function updateDom(element, oldProps, nextProps) {
   for (let k1 of nextKeys) {
     element[k1] = nextProps[k1];
   }
+
   for (let k2 of oldKeys) {
     if (!nextKeys.includes(k2)) {
       element[k2] = "";
     }
-  }
-  //   针对事件处理
+  } //   针对事件处理
+
+
   let oldEventKeys = Object.keys(oldProps).filter(isEventType);
   let nextEventKeys = Object.keys(nextProps).filter(isEventType);
 
@@ -267,6 +299,7 @@ function updateDom(element, oldProps, nextProps) {
       element.removeEventListener(e1.substring(2).toLowerCase(), oldProps[e1]);
     }
   }
+
   for (let e2 of nextEventKeys) {
     //   new key
     if (nextProps[e2]) {
@@ -274,7 +307,9 @@ function updateDom(element, oldProps, nextProps) {
     }
   }
 }
+
 function isFunctionComponent(fiber) {
   return fiber && fiber.type instanceof Function;
 }
+
 export { render };
