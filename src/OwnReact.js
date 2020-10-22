@@ -1,6 +1,7 @@
-import {render} from './reconciler.js'
+import {render,useState} from './reconciler.js'
 import {createElement} from './vnode.js'
 export default {
     render,
-    createElement
+    createElement,
+    useState
 }

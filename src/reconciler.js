@@ -64,12 +64,11 @@ function performUnitOfWork(fiber) {
   // create new fibers
   // retuen next unit of work
   console.log("--- 处理单元 ---", fiber);
-  if(isFunctionComponent(fiber)){
-    updateFunctionComponent(fiber)
-  }else{
+  if (isFunctionComponent(fiber)) {
+    updateFunctionComponent(fiber);
+  } else {
     updateHostComponent(fiber);
   }
- 
 
   if (fiber.child) {
     // 首先返回child
@@ -162,19 +161,20 @@ function commitWork(fiber) {
   if (!fiber) {
     return;
   }
-  const domParentFiber = fiber.parent; // 容器
-  while(!domParentFiber.dom){
-    domParentFiber = domParentFiber.parent
+  let domParentFiber = fiber.parent; // 容器
+  while (!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent;
   }
   const domParent = domParentFiber.dom; // 一直往parent找到带有dom的fiber
   // function组件的fiber是没有dom的
 
-  if (fiber.effectTag === EFFECT_TAGS.PLACEMENT) {
+  if (fiber.effectTag === EFFECT_TAGS.PLACEMENT && fiber.dom) {
+    console.log("appendChild to", domParent, fiber);
     domParent.appendChild(fiber.dom); // 将当前fiber的元素挂载
   } else if (fiber.effectTag === EFFECT_TAGS.DELETION) {
     // domParent.removeChild(fiber.dom); //删除
     // 删除旧dom的时候，也要找到带dom的fiber再删除
-    commitDeletion(fiber,domParent)
+    commitDeletion(fiber, domParent);
   } else if (fiber.effectTag === EFFECT_TAGS.UPDATE && fiber.dom != null) {
     // update dom
     updateDom(
@@ -206,18 +206,13 @@ function updateHostComponent(fiber) {
   const elements = fiber.props.children;
   reconcileChildren(fiber, elements);
 }
-// 更新函数组件
-function updateFunctionComponent(fiber){
-  const children = [fiber.type(fiber.props)]
-  reconcileChildren(fiber,children) // 处理children的diff情况
-}
 
 // 删除
-function commitDeletion(fiber,parentDom){
-  if(fiber.dom){
-    parentDom.removeChild(fiber.dom)
-  }else{
-    commitDeletion(fiber.child,parentDom)
+function commitDeletion(fiber, parentDom) {
+  if (fiber.dom) {
+    parentDom.removeChild(fiber.dom);
+  } else {
+    commitDeletion(fiber.child, parentDom);
   }
 }
 /**
@@ -277,4 +272,55 @@ function updateDom(element, oldProps, nextProps) {
 function isFunctionComponent(fiber) {
   return fiber && fiber.type instanceof Function;
 }
-export { render };
+
+let wipFiber = null;
+let hookIndex = null;
+// 更新函数组件
+function updateFunctionComponent(fiber) {
+  // 每次更新fiber都重新初始化
+  wipFiber = fiber;
+  hookIndex = 0;
+  wipFiber.hooks = []; // 缓存的上次hook值
+  const children = [fiber.type(fiber.props)];
+  reconcileChildren(fiber, children); // 处理children的diff情况
+}
+function useState(initialValue) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex]; // 上次相同组件的hook值
+    // new hook value
+  const hook = {
+    state : oldHook ? oldHook.state : initialValue ,// 新的hook的值，用于这次render用
+    // 如果没有oldhook，则使用初始值
+    // 第一次渲染后，第二次就会使用上次得到的值
+    queue:[]
+  }
+  const actions = oldHook && oldHook.queue || []
+  // 执行对state的处理
+  actions.forEach(f=>{
+    hook.state = typeof f === 'function' ? f(hook.state) : f
+  })
+  /**
+   * 
+   * @param {(oldVal:any)=>any} action 
+   */
+  function setState(action){
+    hook.queue.push(action)
+    // 从root重新更新？
+    wipRoot = {
+      dom:currentRoot.dom,
+      props:currentRoot.props,
+      alternate:currentRoot
+    }
+    // 更新
+    nextUnitOfWork = wipRoot
+    deletions = []
+  }
+
+  wipFiber.hooks.push(hook)
+  hookIndex++
+  
+  return [hook.state,setState];
+}
+export { render, useState };

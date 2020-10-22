@@ -1,4 +1,4 @@
-import * as Didact from './OwnReact';
+import Didact from './OwnReact.js';
 /** @jsx Didact.createElement */
 
 function App(props) {
